@@ -2,6 +2,8 @@
 
 trap '{ stty sane; echo ""; errexit "Aborted"; }' SIGINT SIGTERM
 
+BASEPATH="/mnt/usb"
+
 errexit()
 {
   echo ""
@@ -37,11 +39,11 @@ SERIAL="$(tr [A-Z] [a-z] <<< "${SERIAL}")"
 if [[ ! "${SERIAL}" =~ ^[[:xdigit:]]{8}$ ]]; then
   errexit "Invalid serial number: ${SERIAL}"
 fi
-if [[ ! -e "/pxe-boot/${SERIAL}" || ! -e "/pxe-root/${SERIAL}" || $(grep -c "${SERIAL}" /etc/exports) -eq 0 ]]; then
+if [[ ! -e "${BASEPATH}/pxe-boot/${SERIAL}" || ! -e "${BASEPATH}/pxe-root/${SERIAL}" || $(grep -c "${SERIAL}" /etc/exports) -eq 0 ]]; then
   errexit "Serial number ${SERIAL} does not exist" 
 fi
 SYS="$(file -b /bin/bash | sed -n 's|^.*, \(ARM\s*\S*\),.*$|\1|p')"
-PXE="$(file -b /pxe-root/${SERIAL}/bin/bash | sed -n 's|^.*, \(ARM\s*\S*\),.*$|\1|p')"
+PXE="$(file -b ${BASEPATH}/pxe-root/${SERIAL}/bin/bash | sed -n 's|^.*, \(ARM\s*\S*\),.*$|\1|p')"
 if [ "${SYS}" != "${PXE}" ]; then
   errexit "${SERIAL} architecture differs from system architecture"
 fi
@@ -62,24 +64,24 @@ echo "Attempting to chroot to ${SERIAL}"
 echo "Host root filesystem is available at /host-root-fs"
 echo "Use exit or ^D to terminate chroot"
 echo ""
-mount --bind /dev "/pxe-root/${SERIAL}/dev"
-mount --bind /sys "/pxe-root/${SERIAL}/sys"
-mount --bind /proc "/pxe-root/${SERIAL}/proc"
-mount --bind /dev/pts "/pxe-root/${SERIAL}/dev/pts"
-mount --bind "/pxe-boot/${SERIAL}"  "/pxe-root/${SERIAL}/boot"
-mkdir "/pxe-root/${SERIAL}/host-root-fs"
-mount --bind / "/pxe-root/${SERIAL}/host-root-fs"
-chroot "/pxe-root/${SERIAL}"
-umount "/pxe-root/${SERIAL}/dev/pts" "/pxe-root/${SERIAL}/proc" "/pxe-root/${SERIAL}/sys" "/pxe-root/${SERIAL}/dev"
+mount --bind /dev "${BASEPATH}/pxe-root/${SERIAL}/dev"
+mount --bind /sys "${BASEPATH}/pxe-root/${SERIAL}/sys"
+mount --bind /proc "${BASEPATH}/pxe-root/${SERIAL}/proc"
+mount --bind /dev/pts "${BASEPATH}/pxe-root/${SERIAL}/dev/pts"
+mount --bind "${BASEPATH}/pxe-boot/${SERIAL}"  "${BASEPATH}/pxe-root/${SERIAL}/boot"
+mkdir "${BASEPATH}/pxe-root/${SERIAL}/host-root-fs"
+mount --bind / "${BASEPATH}/pxe-root/${SERIAL}/host-root-fs"
+chroot "${BASEPATH}/pxe-root/${SERIAL}"
+umount "${BASEPATH}/pxe-root/${SERIAL}/dev/pts" "${BASEPATH}/pxe-root/${SERIAL}/proc" "${BASEPATH}/pxe-root/${SERIAL}/sys" "${BASEPATH}/pxe-root/${SERIAL}/dev"
 while read MNTPT
 do
-  if [[ "${MNTPT}" != "/pxe-root/${SERIAL}/boot" && "${MNTPT}" != "/pxe-root/${SERIAL}/host-root-fs" && ! "${MNTPT}" =~ ^/pxe-root/${SERIAL}/host-root-fs/pxe-root/${SERIAL}/.*$ ]]; then
+  if [[ "${MNTPT}" != "${BASEPATH}/pxe-root/${SERIAL}/boot" && "${MNTPT}" != "${BASEPATH}/pxe-root/${SERIAL}/host-root-fs" && ! "${MNTPT}" =~ ^${BASEPATH}/pxe-root/${SERIAL}/host-root-fs/pxe-root/${SERIAL}/.*$ ]]; then
     umount "${MNTPT}"
   fi
-done <<< "$(findmnt -lR | sed -n "s|^\(/pxe-root/${SERIAL}/\S\+\)\s\+.*$|\1|p")"
-umount "/pxe-root/${SERIAL}/host-root-fs"
-rmdir "/pxe-root/${SERIAL}/host-root-fs"
-umount "/pxe-root/${SERIAL}/boot"
+done <<< "$(findmnt -lR | sed -n "s|^\(${BASEPATH}/pxe-root/${SERIAL}/\S\+\)\s\+.*$|\1|p")"
+umount "${BASEPATH}/pxe-root/${SERIAL}/host-root-fs"
+rmdir "${BASEPATH}/pxe-root/${SERIAL}/host-root-fs"
+umount "${BASEPATH}/pxe-root/${SERIAL}/boot"
 echo ""
 echo "Exited chroot to ${SERIAL}"
 echo ""

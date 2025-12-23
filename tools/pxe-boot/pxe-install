@@ -2,6 +2,8 @@
 
 trap '{ stty sane; echo ""; errexit "Aborted"; }' SIGINT SIGTERM
 
+BASEPATH="/mnt/usb"
+
 errexit()
 {
   echo ""
@@ -71,7 +73,7 @@ port=0
 dhcp-range=${BRD},proxy
 log-dhcp
 enable-tftp
-tftp-root=/pxe-boot
+tftp-root="${BASEPATH}/pxe-boot"
 pxe-service=0,"Raspberry Pi Boot"
 EOF
 
@@ -97,13 +99,13 @@ EOF
 
 sed -i "s|^#DNS=$|DNS=${DNS_SRV}|" /etc/systemd/resolved.conf
 
-mkdir /pxe-boot
+mkdir "${BASEPATH}/pxe-boot"
 if [ $? -ne 0 ]; then
   errexit "Unable to make BOOT files directory"
 fi
-chmod 777 /pxe-boot
-cp /boot/bootcode.bin /pxe-boot
-mkdir /pxe-root
+chmod 777 "${BASEPATH}/pxe-boot"
+cp /boot/bootcode.bin "${BASEPATH}/pxe-boot"
+mkdir "${BASEPATH}/pxe-root"
 if [ $? -ne 0 ]; then
   errexit "Unable to make ROOT files directory"
 fi

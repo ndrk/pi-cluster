@@ -3,6 +3,7 @@
 trap '{ stty sane; echo ""; errexit "Aborted"; }' SIGINT SIGTERM
 
 MNTPATH="/tmp/pxe-add-mnt"
+BASEPATH="/mnt/usb"
 
 errexit()
 {
@@ -98,7 +99,7 @@ SERIAL="$(tr [A-Z] [a-z] <<< "${SERIAL}")"
 if [[ ! "${SERIAL}" =~ ^[[:xdigit:]]{8}$ ]]; then
   errexit "Invalid serial number: ${SERIAL}"
 fi
-if [[ -e "/pxe-boot/${SERIAL}" || -e "/pxe-root/${SERIAL}" || $(grep -c "${SERIAL}" /etc/exports) -ne 0 ]]; then
+if [[ -e "${BASEPATH}/pxe-boot/${SERIAL}" || -e "${BASEPATH}/pxe-root/${SERIAL}" || $(grep -c "${SERIAL}" /etc/exports) -ne 0 ]]; then
   errexit "Serial number ${SERIAL} already exists" 
 fi
 if [ "${IMGFILE}" = "" ]; then
@@ -142,55 +143,55 @@ while read -r -n 1 -s answer; do
   fi
 done
 mntimg
-mkdir "/pxe-boot/${SERIAL}"
+mkdir "${BASEPATH}/pxe-boot/${SERIAL}"
 if [ $? -ne 0 ]; then
   errexit "Unable to make BOOT files directory"
 fi
 echo ""
 echo "Adding BOOT files"
-rsync -ax "${MNTPATH}/boot/" "/pxe-boot/${SERIAL}/"
+rsync -ax "${MNTPATH}/boot/" "${BASEPATH}/pxe-boot/${SERIAL}/"
 if [ $? -ne 0 ]; then
   errexit "Unable to add BOOT files"
 fi
-mkdir "/pxe-root/${SERIAL}"
+mkdir "${BASEPATH}/pxe-root/${SERIAL}"
 if [ $? -ne 0 ]; then
   errexit "Unable to make ROOT files directory"
 fi
 echo ""
 echo "Adding ROOT files"
-rsync -ax "${MNTPATH}/" "/pxe-root/${SERIAL}/"
+rsync -ax "${MNTPATH}/" "${BASEPATH}/pxe-root/${SERIAL}/"
 if [ $? -ne 0 ]; then
   errexit "Unable to add ROOT files"
 fi
 umntimg
 HOSTIP="$(hostname -I | tr -d ' ')"
-sed -i "s|\(^.*root=\).*$|\1/dev/nfs nfsroot=${HOSTIP}:/pxe-root/${SERIAL},vers=4.1,proto=tcp rw ip=dhcp rootwait elevator=deadline|" "/pxe-boot/${SERIAL}/cmdline.txt"
-sed -i '/ \/boot /d' "/pxe-root/${SERIAL}/etc/fstab"
-sed -i '/ \/ /d' "/pxe-root/${SERIAL}/etc/fstab"
-echo "${HOSTIP}:/pxe-boot/${SERIAL} /boot nfs defaults,vers=4.1,proto=tcp 0 0" >> "/pxe-root/${SERIAL}/etc/fstab"
-echo "${HOSTIP}:/pxe-root/${SERIAL} /     nfs defaults,vers=4.1,proto=tcp 0 0" >> "/pxe-root/${SERIAL}/etc/fstab"
-if [ -f "/pxe-root/${SERIAL}/etc/resize-root-fs" ]; then
-  sed -i '/resize-root-fs/d' "/pxe-root/${SERIAL}/etc/rc.local"
-  rm "/pxe-root/${SERIAL}/etc/resize-root-fs"
+sed -i "s|\(^.*root=\).*$|\1/dev/nfs nfsroot=${HOSTIP}:${BASEPATH}/pxe-root/${SERIAL},vers=4.1,proto=tcp rw ip=dhcp rootwait elevator=deadline|" "${BASEPATH}/pxe-boot/${SERIAL}/cmdline.txt"
+sed -i '/ \/boot /d' "${BASEPATH}/pxe-root/${SERIAL}/etc/fstab"
+sed -i '/ \/ /d' "${BASEPATH}/pxe-root/${SERIAL}/etc/fstab"
+echo "${HOSTIP}:${BASEPATH}/pxe-boot/${SERIAL} /boot nfs defaults,vers=4.1,proto=tcp 0 0" >> "${BASEPATH}/pxe-root/${SERIAL}/etc/fstab"
+echo "${HOSTIP}:${BASEPATH}/pxe-root/${SERIAL} /     nfs defaults,vers=4.1,proto=tcp 0 0" >> "${BASEPATH}/pxe-root/${SERIAL}/etc/fstab"
+if [ -f "${BASEPATH}/pxe-root/${SERIAL}/etc/resize-root-fs" ]; then
+  sed -i '/resize-root-fs/d' "${BASEPATH}/pxe-root/${SERIAL}/etc/rc.local"
+  rm "${BASEPATH}/pxe-root/${SERIAL}/etc/resize-root-fs"
 fi
-if [ -f "/pxe-root/${SERIAL}/etc/init.d/resize2fs_once" ]; then
-  sed -i '/resize2fs /d' "/pxe-root/${SERIAL}/etc/init.d/resize2fs_once"
+if [ -f "${BASEPATH}/pxe-root/${SERIAL}/etc/init.d/resize2fs_once" ]; then
+  sed -i '/resize2fs /d' "${BASEPATH}/pxe-root/${SERIAL}/etc/init.d/resize2fs_once"
 fi
-if [ "$(find "/pxe-boot/${SERIAL}/" -type f -iregex "/pxe-boot/${SERIAL}/ssh\(\.txt\)?" -print -delete)" != "" ]; then
-  if [ $(grep -c 'pxe-enable-ssh' "/pxe-root/${SERIAL}/etc/rc.local") -eq 0 ]; then
-    cat <<EOF > "/pxe-root/${SERIAL}/etc/pxe-enable-ssh"
+if [ "$(find "${BASEPATH}/pxe-boot/${SERIAL}/" -type f -iregex "${BASEPATH}/pxe-boot/${SERIAL}/ssh\(\.txt\)?" -print -delete)" != "" ]; then
+  if [ $(grep -c 'pxe-enable-ssh' "${BASEPATH}/pxe-root/${SERIAL}/etc/rc.local") -eq 0 ]; then
+    cat <<EOF > "${BASEPATH}/pxe-root/${SERIAL}/etc/pxe-enable-ssh"
 #!/bin/bash
 
 update-rc.d ssh enable && invoke-rc.d ssh start
 sed -i '/pxe-enable-ssh/d' /etc/rc.local
 rm /etc/pxe-enable-ssh
 EOF
-    chmod +x "/pxe-root/${SERIAL}/etc/pxe-enable-ssh"
-    sed -i 's|^exit 0$|/etc/pxe-enable-ssh\nexit 0|' "/pxe-root/${SERIAL}/etc/rc.local"
+    chmod +x "${BASEPATH}/pxe-root/${SERIAL}/etc/pxe-enable-ssh"
+    sed -i 's|^exit 0$|/etc/pxe-enable-ssh\nexit 0|' "${BASEPATH}/pxe-root/${SERIAL}/etc/rc.local"
   fi
 fi
-echo "/pxe-boot/${SERIAL} ${CLIENTIP}(rw,sync,no_subtree_check,no_root_squash)" >> /etc/exports
-echo "/pxe-root/${SERIAL} ${CLIENTIP}(rw,sync,no_subtree_check,no_root_squash)" >> /etc/exports
+echo "${BASEPATH}/pxe-boot/${SERIAL} ${CLIENTIP}(rw,sync,no_subtree_check,no_root_squash)" >> /etc/exports
+echo "${BASEPATH}/pxe-root/${SERIAL} ${CLIENTIP}(rw,sync,no_subtree_check,no_root_squash)" >> /etc/exports
 exportfs -ar
 sync
 echo ""
